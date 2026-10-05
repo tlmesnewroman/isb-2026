@@ -1,73 +1,108 @@
 import argparse
 
-import asymmetric_keys_interaction
-import symmetric_text_interaction
-import data_interaction
-import key_generators
+from decryption import decrypt
+from encryption import encrypt
+from file_handler import load_config
+from generation import generate
 
-def parsing()-> argparse.Namespace:
-    """Получение аргументов командной строки"""
-    parser=argparse.ArgumentParser()
-    
-    group=parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('-gen','--generator',action='store_true',help="Режим генерации ключей")
-    group.add_argument('-enc','--encryption',action='store_true',help="Режим шифрования данных")
-    group.add_argument('-dec','--decryption',action='store_true',help="Режим дешифрования данных")
 
-    parser.add_argument("--enc_key", type=str,help="Путь к зашифрованному симметричному ключу")
-    parser.add_argument("--rsa_pri_key", type=str,help="Путь к закрытому ассимметричному ключу")
-    parser.add_argument("--rsa_pub_key", type=str,help="Путь к открытому ассимметричному ключу")
-    parser.add_argument("--enc_text", type=str,help="Путь для сохранения(доступа) к зашифрованному тексту")
-    parser.add_argument("--dec_text", type=str,help="Путь к расшифрованному тексту")
-    parser.add_argument("--init_text", type=str,help="Путь к шифруемому текстовому файлу")
-    parser.add_argument("--len_key", type=str,help="Длина ключа")
-    parser.add_argument("--config", type=str,nargs='?', default="config.json",help="Путь к файлу настроек(по умолчанию config.json)")
+def parse_arguments() -> argparse.Namespace:
+    """
+    Разбирает аргументы командной строки.
+
+    :return: объект с распарсенными аргументами
+    """
+
+    parser = argparse.ArgumentParser(
+        description="Гибридная криптосистема RSA + Blowfish",
+    )
+
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "-gen", "--generation",
+        action="store_true",
+        help="Режим генерации ключей",
+    )
+    mode_group.add_argument(
+        "-enc", "--encryption",
+        action="store_true",
+        help="Режим шифрования данных",
+    )
+    mode_group.add_argument(
+        "-dec", "--decryption",
+        action="store_true",
+        help="Режим дешифрования данных",
+    )
+
+    parser.add_argument(
+        "--input",
+        type=str,
+        help="Путь к исходному файлу",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Путь к выходному файлу",
+    )
+    parser.add_argument(
+        "--sym-key",
+        dest="sym_key",
+        type=str,
+        help="Путь к зашифрованному симметричному ключу",
+    )
+    parser.add_argument(
+        "--public-key",
+        dest="public_key",
+        type=str,
+        help="Путь к открытому RSA-ключу",
+    )
+    parser.add_argument(
+        "--private-key",
+        dest="private_key",
+        type=str,
+        help="Путь к закрытому RSA-ключу",
+    )
 
     return parser.parse_args()
 
-def set_settings()->dict[str,str]:
-    """Установка конфигурации проекта"""
-    args=parsing()
-    settings_file_data=data_interaction.load_json(args.config)
 
-    settings= {
-        'mode': "gen" if args.generator else "enc" if args.encryption else "dec",
-        'initial_file': args.init_text or settings_file_data.get("initial_file"),
-        'encrypted_file':args.enc_text or settings_file_data.get("encrypted_file"),
-        'decrypted_file':args.dec_text or settings_file_data.get("decrypted_file"),
-        'symmetric_key':args.enc_key or settings_file_data.get("symmetric_key"),
-        'public_key':args.rsa_pub_key or settings_file_data.get("public_key"),
-        'secret_key':args.rsa_pri_key or settings_file_data.get("secret_key"),
-        'len_key':args.len_key or settings_file_data.get("len_key"),
-    }
-    return settings
+def main() -> None:
+    """
+    Точка входа приложения.
+    """
 
-def main()->None:
-    config=set_settings()
+    args = parse_arguments()
+    settings = load_config("settings.json")
 
-    match config:
-        case _ if config['mode']=="gen":
-            print("Выполение сценария генерации ключей...")
-            private_key,public_key=key_generators.generate_asy_key()
-            sym_key=key_generators.generate_sym_key(int(config['len_key']))
-            data_interaction.save_asy_key(config['public_key'],config['secret_key'],private_key,public_key)
-            enc_sym_key=asymmetric_keys_interaction.enc_sym_key(public_key,sym_key)
-            data_interaction.save_sym_key(config['symmetric_key'],enc_sym_key)
-            print("Выполение сценария закончено...")
-        case _ if config['mode']=="enc":
-            print("Выполение сценария шифрования данных...")
-            dec_sym_key=asymmetric_keys_interaction.dec_sym_key(data_interaction.load_asy_pri_key(config['secret_key']),
-                                                                data_interaction.load_sym_key(config['symmetric_key']))
-            enc_data=symmetric_text_interaction.encode_text(dec_sym_key,data_interaction.read_text_file(config['initial_file']))
-            data_interaction.write_file(enc_data,config['encrypted_file'])
-            print("Выполение сценария закончено...")
-        case _ if config['mode']=="dec":
-            print("Выполение сценария дешифрования данных...")
-            dec_sym_key=asymmetric_keys_interaction.dec_sym_key(data_interaction.load_asy_pri_key(config['secret_key']),
-                                                                data_interaction.load_sym_key(config['symmetric_key']))
-            enc_data=symmetric_text_interaction.decode_text(dec_sym_key,data_interaction.read_file(config['encrypted_file']))
-            data_interaction.write_text_file(enc_data,config['decrypted_file'])
-            print("Выполение сценария закончено...")
+    path_sym_key = args.sym_key or settings["symmetric_key"]
+    path_public_key = args.public_key or settings["public_key"]
+    path_private_key = args.private_key or settings["private_key"]
 
-if __name__=="__main__":
+    match args:
+        case _ if args.generation:
+            generate(
+                path_sym_key,
+                path_public_key,
+                path_private_key,
+                settings["symmetric_key_length"],
+            )
+
+        case _ if args.encryption:
+            encrypt(
+                args.input or settings["initial_file"],
+                path_private_key,
+                path_sym_key,
+                args.output or settings["encrypted_file"],
+            )
+
+        case _ if args.decryption:
+            decrypt(
+                args.input or settings["encrypted_file"],
+                path_private_key,
+                path_sym_key,
+                args.output or settings["decrypted_file"],
+            )
+
+
+if __name__ == "__main__":
     main()
