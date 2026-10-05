@@ -18,17 +18,22 @@ class NISTTests:
 
     @staticmethod
     def runs_test(seq: str) -> float:
-        count = 0
-        for bit in seq:
-            count += int(bit)
-        ratio: float = count / len(seq)
-        if abs(ratio - 0.5) >= 2 / sqrt(len(seq)):
+        """
+        Тест на одинаковые подряд идущие биты (Runs Test).
+        """
+        n = len(seq)
+        count = seq.count('1')
+
+        ratio: float = count / n
+        if abs(ratio - 0.5) >= (2 / math.sqrt(n)):
             return 0.0
-        v = 1
-        for i in range(len(seq) - 1):
-            if seq[i] != seq[i + 1]:
-                v += 1
-        p = erfc(abs(v - 2 * len(seq) * ratio * (1 - ratio)) / (2 * sqrt(2 * len(seq)) * ratio * (1 - ratio)))
+            
+        v = sum([1 if seq[i] != seq[i + 1] else 0 for i in range(n - 1)])
+
+        numerator = abs(v - 2 * n * ratio * (1 - ratio))
+        denominator = (2 * math.sqrt(2 * n) * ratio * (1 - ratio))
+        p =  numerator / denominator
+            
         return p
 
     @staticmethod
@@ -43,6 +48,7 @@ class NISTTests:
             raise ValueError("Этот тест настроен для последовательности длиной 128 бит.")
 
         m = 8
+        k = 3  # Количество категорий (v0, v1, v2, v3)
         num_blocks = n // m
 
         # Теоретические вероятности Pi для M=8
@@ -76,21 +82,20 @@ class NISTTests:
             expected = num_blocks * pi_values[i]
             chi_squared += ((v[i] - expected) ** 2) / expected
 
-        # Вычисляем P-значение с помощью неполной гамма-функции
+        # Вычисляем P-значение с помощью неполной гамма-функции (igamc)
         # gammaincc(a, x) = 1 / Gamma(a) * integral from x to inf of t^(a-1) * e^(-t) dt
-        p_value = scipy.special.gammaincc(3 / 2, chi_squared / 2)
+        p_value = scipy.special.gammaincc(k / 2, chi_squared / 2)
         return p_value
 
 
 if __name__ == "__main__":
-    # Пример использования
     # Последовательность, сгенерированная на C++ для примера
     seq_cpp = "10100110101110011100010101101101100010001101111000111010010101110100110111001100111010110100101000110110111000110101110010110001"
     # Убираем пробелы, если они есть
     seq_cpp = seq_cpp.replace(" ", "")
 
     print("Анализ последовательности (C++):")
-    print(f"Последовательность: {seq_cpp[:64]}...")  # Показываем первые 64 бита
+    print(f"Последовательность: {seq_cpp}")
 
     p_freq = NISTTests.frequency_test(seq_cpp)
     p_runs = NISTTests.runs_test(seq_cpp)
