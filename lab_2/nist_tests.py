@@ -27,13 +27,13 @@ class NISTTests:
         ratio: float = count / n
         if abs(ratio - 0.5) >= (2 / math.sqrt(n)):
             return 0.0
-            
+        
         v = sum([1 if seq[i] != seq[i + 1] else 0 for i in range(n - 1)])
 
         numerator = abs(v - 2 * n * ratio * (1 - ratio))
         denominator = (2 * math.sqrt(2 * n) * ratio * (1 - ratio))
         p =  numerator / denominator
-            
+        
         return p
 
     @staticmethod
